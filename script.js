@@ -1,57 +1,39 @@
+let step = 0;
+let grid = null;
+let canvas = null;
 const main = () => {
   new p5();
-  const canvas = document.getElementById(MAIN_CANVAS_ID);
+  canvas = document.getElementById(MAIN_CANVAS_ID);
   resizeCanvas(canvas);
-  const grid = createGrid();
+  grid = createGrid();
   const loop = () => {
-    updateGrid(grid);
+    updateGrid(grid, step);
     renderGrid(grid, canvas);
+    step = lerp(step, step + MAX_UPDATE_STEP, 2/3);
     window.requestAnimationFrame(loop);
   };
   loop();
 };
 
 const resizeCanvas = (canvas) => {
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
+  canvas.style.width = `${CANVAS_WIDTH_PX}px`;
+  canvas.style.height = `${CANVAS_HEIGHT_PX}px`;
   // ...then set the internal size to match
   canvas.width = canvas.offsetWidth;
   canvas.height = canvas.offsetHeight;
 };
 
-const createGrid = () => {
-  const total = GRID_ROW_COUNT * GRID_COL_COUNT;
-  return createList(GRID_ROW_COUNT, (_, r) =>
-    createList(GRID_COL_COUNT, (_, c) => {
-      const ang = noise((r + 1) / GRID_ROW_COUNT, (c + 1) / GRID_COL_COUNT);
-      const colorMinDecimal = 0.001;
-      const colorMin = color(getHexColor(colorMinDecimal));
-      const colorMax = color(getHexColor(1 - colorMinDecimal));
-      const amt = (r * GRID_COL_COUNT + c) / total;
-      return {
-        age: 0,
-        ang,
-        mag: ang,
-        tmp: colorToRange(lerpColor(colorMin, colorMax, amt)),
-      };
-    })
-  );
-};
+const createGrid = () =>
+  createList(GRID_ROW_COUNT, () => createList(GRID_COL_COUNT, newCell));
 
 const createList = (size, filler = (x) => x) =>
   Array.from(new Array(size)).map(filler);
 
-const updateGrid = (gridValues) => {
-  const updateStep = random() * MAX_UPDATE_STEP;
-  onEachCell(gridValues, ({ cell, colIdx, rowIdx }) => {
-    cell.age += updateStep;
-    const mod = cell.age;
-    cell.mag = noise(
-      (rowIdx + 1) / GRID_ROW_COUNT + mod,
-      (colIdx + 1) / GRID_COL_COUNT + mod
-    );
-    cell.ang = cell.mag;
-    cell.tmp = getNxtColor(cell.tmp, updateStep);
+const newCell = () => ({ v: 0.0 });
+
+const updateGrid = (gridValues, step) => {
+  onEachCell(gridValues, ({ cell, posX, posY }) => {
+    cell.v = noise(posX, posY, step);
   });
 };
 
@@ -60,30 +42,39 @@ const updateGrid = (gridValues) => {
  */
 const renderGrid = (gridValues, canvas) => {
   const canvasCtx = canvas.getContext('2d');
-  canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+  canvasCtx.fillStyle = 'black';
+  canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
   onEachCell(gridValues, ({ cell, colIdx, rowIdx }) => {
     const cellBoundSize = Math.max(CELL_WIDTH_PX, CELL_HEIGHT_PX) / 4;
-    const startX = cellBoundSize * (colIdx + 0.5);
-    const startY = cellBoundSize * (rowIdx + 0.5);
-    const angle = rangeToAngle(cell.ang);
-    const color = getHexColor(cell.tmp);
+    const startX = cellBoundSize * (colIdx - 1);
+    const startY = cellBoundSize * (rowIdx - 1);
+    const cellSize = getCellSize(cell.v);
+    const cellHeight = map(cellSize, 0, CELL_WIDTH_PX, 0, CELL_HEIGHT_PX, true);
+    const angle = rangeToAngle(cell.v);
+    const color = getCellColor(cell.v, cellSize);
 
     // put a dot in the center of the cell space
     const centerX = startX + cellBoundSize / 2;
     const centerY = startY + cellBoundSize / 2;
     canvasCtx.translate(centerX, centerY);
     canvasCtx.rotate(angle);
-    canvasCtx.fillStyle = color;
-    const cellSize = cell.mag * CELL_WIDTH_PX;
+    const grd = canvasCtx.createLinearGradient(0, 0, cellSize, 0);
+    grd.addColorStop(0, 'transparent');
+    grd.addColorStop(2 / 3, color);
+    canvasCtx.fillStyle = grd;
+    // point at center
+    // canvasCtx.fillRect(
+    //   -cellHeight / 2,
+    //   -cellHeight / 2,
+    //   cellHeight,
+    //   cellHeight
+    // );
     // line from center to end
-    canvasCtx.fillRect(0, -CELL_HEIGHT_PX / 2, cellSize, CELL_HEIGHT_PX);
+    canvasCtx.fillRect(0, -cellHeight / 2, cellSize, cellHeight);
     // point at end of line
-      canvasCtx.fillRect(
-        cellSize,
-        -CELL_HEIGHT_PX,
-        CELL_HEIGHT_PX * 2,
-        CELL_HEIGHT_PX * 2
-      );
+    canvasCtx.beginPath();
+    canvasCtx.arc(cellSize, 0, cellHeight / 2, 0, Math.PI * 2);
+    canvasCtx.fill();
     canvasCtx.rotate(-angle);
     canvasCtx.translate(-centerX, -centerY);
   });
@@ -96,43 +87,64 @@ const onEachCell = (grid, cb) => {
   // const total = GRID_ROW_COUNT * GRID_COL_COUNT;
   grid.forEach((row, rowIdx) => {
     row.forEach((cell, colIdx) => {
-      const posX = (rowIdx + 1) / (GRID_ROW_COUNT + 1);
-      const posY = (colIdx + 1) / (GRID_COL_COUNT + 1);
+      const posX = norm(rowIdx, 0, GRID_ROW_COUNT);
+      const posY = norm(colIdx, 0, GRID_COL_COUNT);
       cb({ cell, colIdx, rowIdx, posX, posY });
     });
   });
 };
 
+const getCellScale = (v) => map(v, 1 / 3, 2 / 3, 0, 1);
+const getCellSize = (v) => getCellScale(v) * CELL_WIDTH_PX;
+const getCellColor = (v, cellSize) => {
+  const col = color(getHexColor(v));
+  col.setAlpha(map(cellSize, 0, CELL_WIDTH_PX, 0, 255, true));
+  return col;
+};
+
 /**
  * Convert value between 0..1 to 3 char hexadecimal e.g. 1 => FFF
  */
-const getHexColor = (tmp) => `#${rangeToColor(tmp)}`;
-const getNxtColor = (point, step) =>
-  colorToRange(
-    lerpColor(
-      color(getHexColor(point)),
-      color(getHexColor(point + step)),
-      MAX_UPDATE_STEP
-    )
+const getHexColor = (tmp) =>
+  `${COLOR_HEX_TOKEN}${colorToHex(rangeToColor(tmp))}`;
+const rangeToColor = (tmp) => {
+  const colorStopRGB = tmp * COLOR_RANGE.length;
+  const colorL = color(
+    COLOR_RANGE[Math.floor(colorStopRGB) % COLOR_RANGE.length]
   );
+  const colorR = color(
+    COLOR_RANGE[Math.ceil(colorStopRGB) % COLOR_RANGE.length]
+  );
+  const col = lerpColor(
+    colorL,
+    colorR,
+    colorStopRGB - Math.floor(colorStopRGB)
+  );
+  return col;
+};
+const colorToHex = (col) =>
+  col.toString(`${COLOR_HEX_TOKEN}${COLOR_FORMAT}`).substring(1);
 const colorToRange = (col) =>
-  parseInt(
-    col
-      .toString(`#${COLOR_FORMAT.toLowerCase().replace(/\w/g, (c) => c + c)}`)
-      .substring(1),
-    16
-  ) / MAX_COLOR_DECIMAL;
-const rangeToColor = (tmp) => Math.round(tmp * MAX_COLOR_DECIMAL).toString(16);
-const rangeToAngle = (rng) => rng * Math.PI * 4;
+  norm(parseInt(colorToHex(col), 16), 0, MAX_COLOR_DECIMAL);
+const rangeToAngle = (rng) => constrain(rng, 0, 1) * MAX_ANGLE;
 
 const MAIN_CANVAS_ID = 'main-screen';
-const GRID_COL_COUNT = 40;
-const GRID_ROW_COUNT = GRID_COL_COUNT;
+const GRID_COL_COUNT = 96;
+const GRID_ROW_COUNT = 60;
 const CELL_MARGIN_PX = 2;
-const CELL_HEIGHT_PX = 2;
-const CELL_WIDTH_PX = GRID_COL_COUNT / 2;
-const COLOR_FORMAT = 'rgba';
-const MAX_COLOR_DECIMAL = parseInt(COLOR_FORMAT.replace(/\w/g, 'FF'), 16);
-const MAX_UPDATE_STEP = GRID_COL_COUNT / 20000;
+const CELL_HEIGHT_PX = 8;
+const CELL_WIDTH_PX = 80;
+const CANVAS_WIDTH_PX = 1728;
+const CANVAS_HEIGHT_PX = (CANVAS_WIDTH_PX * GRID_ROW_COUNT) / GRID_COL_COUNT;
+const COLOR_HEX_TOKEN = '#';
+const COLOR_RANGE = ['F84', '4F8', '84F', 'FF4', 'F4F', '4FF', 'F48', '48F', '8F4', 'FFF']
+  .flatMap((hex) => new Array(1).fill(`${COLOR_HEX_TOKEN}${hex}`))
+  .sort(() => Math.random() - Math.random())
+  .slice(0, 4);
+const COLOR_FORMAT = 'rgba'.replace(/\w/g, (c) => c + c);
+const COLOR_FORMAT_MAX = COLOR_FORMAT.replace(/\w/g, 'F');
+const MAX_COLOR_DECIMAL = parseInt(COLOR_FORMAT_MAX, 16);
+const MAX_UPDATE_STEP = 0.01;
+const MAX_ANGLE = Math.PI * 4;
 
 main();
