@@ -1,107 +1,124 @@
-function main() {
+const main = () => {
+  new p5();
   const canvas = document.getElementById(MAIN_CANVAS_ID);
   resizeCanvas(canvas);
-  const ctx = canvas.getContext('2d');
   const grid = createGrid();
   const loop = () => {
     updateGrid(grid);
-    renderGrid(grid, ctx);
+    renderGrid(grid, canvas);
     window.requestAnimationFrame(loop);
   };
   loop();
-}
+};
 
-function resizeCanvas(canvas) {
+const resizeCanvas = (canvas) => {
   canvas.style.width = '100%';
   canvas.style.height = '100%';
   // ...then set the internal size to match
   canvas.width = canvas.offsetWidth;
   canvas.height = canvas.offsetHeight;
-}
+};
 
-function createGrid() {
+const createGrid = () => {
+  const total = GRID_ROW_COUNT * GRID_COL_COUNT;
   return Array.from(new Array(GRID_ROW_COUNT)).map((_, r) =>
     Array.from(new Array(GRID_COL_COUNT)).map((_, c) => {
-      const scale =
-        1 -
-        (Math.abs(GRID_COL_COUNT / 2 - c) / GRID_COL_COUNT +
-          Math.abs(GRID_ROW_COUNT / 2 - r) / GRID_ROW_COUNT);
+      const ang = noise((r + 1) / GRID_ROW_COUNT, (c + 1) / GRID_COL_COUNT);
+      const colorMinDecimal = 0.001;
+      const colorMin = color(getHexColor(colorMinDecimal));
+      const colorMax = color(getHexColor(1 - colorMinDecimal));
+      const amt = (r * GRID_COL_COUNT + c) / total;
       return {
-        magnitude: scale * MAX_MAGNITUDE,
-        angle: scale * Math.PI * 2,
-        temp: scale * MAX_TEMPERATURE,
+        age: 0,
+        ang,
+        mag: ang,
+        tmp: colorToRange(lerpColor(colorMin, colorMax, amt)),
       };
     })
   );
-}
+};
 
-function updateGrid(gridValues) {
+const updateGrid = (gridValues) => {
+  const updateStep = random() * MAX_UPDATE_STEP;
   gridValues.forEach((row, rowIdx) => {
     row.forEach((cell, colIdx) => {
-      // get the average values from surrounding cells
-      const neighbourCells = getAverageNeighbourCell(
-        gridValues,
-        rowIdx,
-        colIdx
+      cell.age += updateStep;
+      const mod = cell.age;
+      cell.mag = noise(
+        (rowIdx + 1) / GRID_ROW_COUNT + mod,
+        (colIdx + 1) / GRID_COL_COUNT + mod
       );
+      cell.ang = cell.mag;
+      cell.tmp = getNxtColor(cell.tmp, updateStep);
     });
   });
-}
+};
 
-function getAverageNeighbourCell(gridValues, rowIdx, colIdx) {}
-
-function renderGrid(gridValues, canvasCtx) {
+/**
+ * Render grid as given
+ */
+const renderGrid = (gridValues, canvas) => {
+  const canvasCtx = canvas.getContext('2d');
+  canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
   gridValues.forEach((row, rowIdx) => {
     row.forEach((cell, colIdx) => {
-      const cellBoundSize = Math.max(CELL_WIDTH_PX, CELL_HEIGHT_PX);
+      const cellBoundSize = Math.max(CELL_WIDTH_PX, CELL_HEIGHT_PX) / 4;
       const startX = cellBoundSize * (colIdx + 0.5);
       const startY = cellBoundSize * (rowIdx + 0.5);
+      const angle = cell.ang * Math.PI * 4;
+      const color = getHexColor(cell.tmp);
 
-      // show a grid to help with placement
-      canvasCtx.fillStyle = '#CFC4';
-      canvasCtx.fillRect(startX, startY, cellBoundSize, cellBoundSize);
-      canvasCtx.fillStyle = '#CCF4';
-      canvasCtx.fillRect(
-        startX + CELL_MARGIN_PX,
-        startY + CELL_MARGIN_PX,
-        cellBoundSize - CELL_MARGIN_PX * 2,
-        cellBoundSize - CELL_MARGIN_PX * 2
-      );
       // put a dot in the center of the cell space
       const centerX = startX + cellBoundSize / 2;
       const centerY = startY + cellBoundSize / 2;
       canvasCtx.translate(centerX, centerY);
-      canvasCtx.rotate(cell.angle);
-      // canvasCtx.fillStyle = '#000';
-      // canvasCtx.fillRect(0, 0, 2, 2);
-      canvasCtx.fillStyle = `#${getTempColor(cell.temp)}`;
-      const cellSize = (cell.magnitude / MAX_MAGNITUDE) * CELL_WIDTH_PX;
+      canvasCtx.rotate(angle);
+      canvasCtx.fillStyle = color;
+      const cellSize = cell.mag * CELL_WIDTH_PX;
+      // line
+      canvasCtx.fillRect(0, -CELL_HEIGHT_PX / 2, cellSize, CELL_HEIGHT_PX);
+      // point
       canvasCtx.fillRect(
-        -cellSize / 2,
-        -CELL_HEIGHT_PX / 2,
         cellSize,
-        CELL_HEIGHT_PX
+        -CELL_HEIGHT_PX,
+        CELL_HEIGHT_PX * 2,
+        CELL_HEIGHT_PX * 2
       );
-      canvasCtx.rotate(-cell.angle);
+      canvasCtx.rotate(-angle);
       canvasCtx.translate(-centerX, -centerY);
     });
   });
-}
+};
 
 /**
  * Convert value between 0..1 to 3 char hexadecimal e.g. 1 => FFF
  */
-function getTempColor(temp) {
-  return Math.round((temp / MAX_TEMPERATURE) * 4095).toString(16);
-}
+const getTmpColor = (tmp) => Math.round(tmp * MAX_COLOR_DECIMAL).toString(16);
+const getHexColor = (tmp) => `#${getTmpColor(tmp)}`;
+const getNxtColor = (point, step) =>
+  colorToRange(
+    lerpColor(
+      color(getHexColor(point)),
+      color(getHexColor(point + step)),
+      MAX_UPDATE_STEP
+    )
+  );
+const colorToRange = (col) =>
+  parseInt(
+    col
+      .toString(`#${COLOR_FORMAT.toLowerCase().replace(/\w/g, (c) => c + c)}`)
+      .substring(1),
+    16
+  ) / MAX_COLOR_DECIMAL;
 
 const MAIN_CANVAS_ID = 'main-screen';
-const GRID_COL_COUNT = 20;
-const GRID_ROW_COUNT = 20;
-const CELL_MARGIN_PX = 1;
+const GRID_COL_COUNT = 40;
+const GRID_ROW_COUNT = GRID_COL_COUNT;
+const CELL_MARGIN_PX = 2;
 const CELL_HEIGHT_PX = 2;
-const CELL_WIDTH_PX = 20;
-const MAX_MAGNITUDE = 2;
-const MAX_TEMPERATURE = 1;
+const CELL_WIDTH_PX = GRID_COL_COUNT / 2;
+const COLOR_FORMAT = 'rgba';
+const MAX_COLOR_DECIMAL = parseInt(COLOR_FORMAT.replace(/\w/g, 'FF'), 16);
+const MAX_UPDATE_STEP = 0.005;
 
 main();
