@@ -1,22 +1,36 @@
 let step = 0;
+let play = true;
 let grid = null;
 let canvas = null;
+
 const main = () => {
-  new p5();
-  noiseSeed(0);
-  canvas = document.getElementById(MAIN_CANVAS_ID);
-  resizeCanvas(canvas);
-  grid = createGrid();
-  const loop = () => {
-    updateGrid(grid, step);
-    renderGrid(grid, canvas);
-    step = lerp(step, step + MAX_UPDATE_STEP, 2/3);
-    window.requestAnimationFrame(loop);
-  };
+  init();
   loop();
 };
 
-const resizeCanvas = (canvas) => {
+/** Start and keep loop running */
+const loop = () => {
+  if (play) next();
+  window.requestAnimationFrame(loop);
+};
+
+/** Process next loop frame */
+const next = () => {
+  updateGrid(grid, step);
+  renderGrid(grid);
+  step = lerp(step, step + UPDATE_STEP_MAX, 2 / 3);
+};
+
+/** Initialise sim env */
+const init = () => {
+  new p5();
+  noiseSeed(step);
+  initCanvas(CANVAS_ID);
+  grid = createGrid();
+};
+
+const initCanvas = (canvasId) => {
+  canvas = document.getElementById(canvasId);
   canvas.style.width = `${CANVAS_WIDTH_PX}px`;
   canvas.style.height = `${CANVAS_HEIGHT_PX}px`;
   // ...then set the internal size to match
@@ -41,10 +55,14 @@ const updateGrid = (gridValues, step) => {
 /**
  * Render grid as given
  */
-const renderGrid = (gridValues, canvas) => {
+const renderGrid = (gridValues) => {
   const canvasCtx = canvas.getContext('2d');
-  canvasCtx.fillStyle = 'black';
+  canvasCtx.reset();
+  canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+  canvasCtx.fillStyle = COLOR_BG;
   canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
   onEachCell(gridValues, ({ cell, colIdx, rowIdx }) => {
     const cellBoundSize = Math.max(CELL_WIDTH_PX, CELL_HEIGHT_PX) / 4;
     const startX = cellBoundSize * (colIdx - 1) + cell.d;
@@ -71,8 +89,10 @@ const renderGrid = (gridValues, canvas) => {
     //   cellHeight
     // );
     // line from center to end
+    canvasCtx.globalCompositeOperation = COLOR_BLEND_FFF;
     canvasCtx.fillRect(0, -cellHeight / 2, cellSize, cellHeight);
     // point at end of line
+    // canvasCtx.globalCompositeOperation = COLOR_BLEND_DEF;
     canvasCtx.beginPath();
     canvasCtx.arc(cellSize, 0, cellHeight / 2, 0, Math.PI * 2);
     canvasCtx.fill();
@@ -126,26 +146,28 @@ const rangeToColor = (tmp) => {
 const colorToHex = (col) =>
   col.toString(`${COLOR_HEX_TOKEN}${COLOR_FORMAT}`).substring(1);
 const colorToRange = (col) =>
-  norm(parseInt(colorToHex(col), 16), 0, MAX_COLOR_DECIMAL);
-const rangeToAngle = (rng) => constrain(rng, 0, 1) * MAX_ANGLE;
+  norm(parseInt(colorToHex(col), 16), 0, COLOR_MAX_DEC);
+const rangeToAngle = (rng) => constrain(rng, 0, 1) * ANGLE_MAX_RAD;
 
-const MAIN_CANVAS_ID = 'main-screen';
+const ANGLE_MAX_RAD = Math.PI * 4;
 const GRID_COL_COUNT = 96;
 const GRID_ROW_COUNT = 60;
-const CELL_MARGIN_PX = 2;
-const CELL_HEIGHT_PX = 8;
-const CELL_WIDTH_PX = 80;
+const CANVAS_ID = 'main-screen';
 const CANVAS_WIDTH_PX = 1728;
 const CANVAS_HEIGHT_PX = (CANVAS_WIDTH_PX * GRID_ROW_COUNT) / GRID_COL_COUNT;
-const COLOR_HEX_TOKEN = '#';
-const COLOR_RANGE = ['F84', '4F8', '84F', 'FF4', 'F4F', '4FF', 'F48', '48F', '8F4', 'FFF']
-  .flatMap((hex) => new Array(1).fill(`${COLOR_HEX_TOKEN}${hex}`))
-  .sort(() => Math.random() - Math.random())
-  .slice(0, 4);
+const CELL_WIDTH_PX = 80;
+const CELL_HEIGHT_PX = 8;
+const CELL_MARGIN_PX = 2;
+const COLOR_BG = 'black';
+const COLOR_BLEND_DEF = 'source-over';
+const COLOR_BLEND_FFF = 'lighter';
 const COLOR_FORMAT = 'rgba'.replace(/\w/g, (c) => c + c);
-const COLOR_FORMAT_MAX = COLOR_FORMAT.replace(/\w/g, 'F');
-const MAX_COLOR_DECIMAL = parseInt(COLOR_FORMAT_MAX, 16);
-const MAX_UPDATE_STEP = 0.01;
-const MAX_ANGLE = Math.PI * 4;
+const COLOR_MAX_HEX = COLOR_FORMAT.replace(/\w/g, 'F');
+const COLOR_MAX_DEC = parseInt(COLOR_MAX_HEX, 16);
+const COLOR_HEX_TOKEN = '#';
+const COLOR_RANGE = ['D74', '4D7', '74D', 'D47', '47D', '7D4']
+  .flatMap((hex) => new Array(1).fill(`${COLOR_HEX_TOKEN}${hex}`))
+  .sort(() => Math.random() - Math.random());
+const UPDATE_STEP_MAX = 0.01;
 
 main();
