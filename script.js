@@ -3,6 +3,7 @@ let grid = null;
 let canvas = null;
 const main = () => {
   new p5();
+  noiseSeed(0);
   canvas = document.getElementById(MAIN_CANVAS_ID);
   resizeCanvas(canvas);
   grid = createGrid();
@@ -29,11 +30,11 @@ const createGrid = () =>
 const createList = (size, filler = (x) => x) =>
   Array.from(new Array(size)).map(filler);
 
-const newCell = () => ({ v: 0.0 });
+const newCell = () => ({ v: 0.0, d: (random() - 0.5) * CELL_HEIGHT_PX });
 
 const updateGrid = (gridValues, step) => {
   onEachCell(gridValues, ({ cell, posX, posY }) => {
-    cell.v = noise(posX, posY, step);
+    cell.v = noise(posX - step, posY - step, step);
   });
 };
 
@@ -46,8 +47,8 @@ const renderGrid = (gridValues, canvas) => {
   canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
   onEachCell(gridValues, ({ cell, colIdx, rowIdx }) => {
     const cellBoundSize = Math.max(CELL_WIDTH_PX, CELL_HEIGHT_PX) / 4;
-    const startX = cellBoundSize * (colIdx - 1);
-    const startY = cellBoundSize * (rowIdx - 1);
+    const startX = cellBoundSize * (colIdx - 1) + cell.d;
+    const startY = cellBoundSize * (rowIdx - 1) + cell.d;
     const cellSize = getCellSize(cell.v);
     const cellHeight = map(cellSize, 0, CELL_WIDTH_PX, 0, CELL_HEIGHT_PX, true);
     const angle = rangeToAngle(cell.v);
