@@ -1,4 +1,4 @@
-let step = 0;
+let step = Math.random();
 let play = true;
 let grid = null;
 let canvas = null;
@@ -31,6 +31,7 @@ const init = () => {
 
 const initCanvas = (canvasId) => {
   canvas = document.getElementById(canvasId);
+  canvas.style.scale = 1.2;
   canvas.style.width = `${CANVAS_WIDTH_PX}px`;
   canvas.style.height = `${CANVAS_HEIGHT_PX}px`;
   // ...then set the internal size to match
@@ -150,11 +151,11 @@ const colorToRange = (col) =>
 const rangeToAngle = (rng) => constrain(rng, 0, 1) * ANGLE_MAX_RAD;
 
 const ANGLE_MAX_RAD = Math.PI * 4;
+const CANVAS_WIDTH_PX = window.screen.availWidth;
+const CANVAS_HEIGHT_PX = window.screen.availHeight;
 const GRID_COL_COUNT = 96;
-const GRID_ROW_COUNT = 60;
+const GRID_ROW_COUNT = Math.round(GRID_COL_COUNT * CANVAS_HEIGHT_PX / CANVAS_WIDTH_PX);
 const CANVAS_ID = 'main-screen';
-const CANVAS_WIDTH_PX = 1728;
-const CANVAS_HEIGHT_PX = (CANVAS_WIDTH_PX * GRID_ROW_COUNT) / GRID_COL_COUNT;
 const CELL_WIDTH_PX = 80;
 const CELL_HEIGHT_PX = 8;
 const CELL_MARGIN_PX = 2;
